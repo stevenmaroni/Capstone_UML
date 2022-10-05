@@ -1,0 +1,6 @@
+These people/ companies will needed to be credited in our report:
+Arduino - for example code
+
+https://forum.arduino.cc/t/adafruit-tft-touchscreen-keypad-for-touchscreen/347024 - For intro to keyboard setup
+
+https://github.com/Siytek/AnotherIFTTTWebhook - For Webhook code

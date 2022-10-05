@@ -42,8 +42,7 @@ void setup() {
       //Serial.println("\ny div: ");
       //Serial.println(p.y);
       if(p.y >= 5 && p.x >= 10 && p.y <= 475 && p.x <= 310){
-        if( p.y >= 80 && p.y
-        <= 400){
+        if( p.y >= 80 && p.y <= 400){
           continue;
         }
         else if(p.y < 80 && page > 0){
