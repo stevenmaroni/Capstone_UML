@@ -8,10 +8,7 @@
 
 This Is a repository for all Arduino Code made for the 22-010 Capstone group. Code is sorted in the following ways:
 
-1. Testing Code - This code is code that may be hand made, Example or online based code. This snippets are NOT meant
-   for production use and are not a part of the project itself.
-   
-   Testing Code is simply all code that has been used to test or learn certian aspects of the arduino language
+1. Testing Code - This code is code that used to learn how to use the arduino IDE. This snippets are NOT meant for production use and are not a part of the project itself.
 
 2. Partial Code - This is Handmade code that will be used later in the file project. These programs will vary in use
    and size, but will all be the baseline for what the final code will be. (Currently not finished)
