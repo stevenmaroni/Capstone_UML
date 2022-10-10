@@ -43,7 +43,21 @@ void setup() {
       //Serial.println(p.y);
       if(p.y >= 5 && p.x >= 10 && p.y <= 475 && p.x <= 310){
         if( p.y >= 80 && p.y <= 400){
-          continue;
+          if( p.x >= 10 && p.x < 70){
+            return ((page *5));
+          }
+          else if( p.x >= 70 && p.x < 130){
+            return ((page *5) + 1);
+          }
+          else if( p.x >= 130 && p.x < 190){
+            return ((page *5) + 2);
+          }
+          else if( p.x >= 190 && p.x < 250){
+            return ((page *5) + 3);
+          }
+          else if( p.x >= 250 && p.x <= 310){
+            return ((page *5) + 4);
+          }
         }
         else if(p.y < 80 && page > 0){
           page = page -1;

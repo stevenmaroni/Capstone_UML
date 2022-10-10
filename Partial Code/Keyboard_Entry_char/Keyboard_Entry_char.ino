@@ -24,29 +24,29 @@ TouchScreen ts = TouchScreen(XP, YP, XM, YM, 300);
 
 #include <avr/pgmspace.h>
 
-const String Keypad_basic_lower[4][10] = {
-  {"1", "2", "3", "4", "5", "6", "7", "8", "9", "0"},
-  {"q", "w", "e", "r", "t", "y", "u", "i", "o", "p"},
-  {"a", "s", "d", "f", "g", "h", "j", "k", "l", "z"},
-  {" ", " ", "x", "c", "v", "b", "n", "m", " ", " "},
+const char Keypad_basic_lower[4][10] PROGMEM = {
+  {'1', '2', '3', '4', '5', '6', '7', '8', '9', '0'},
+  {'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'},
+  {'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', 'z'},
+  {' ', ' ', 'x', 'c', 'v', 'b', 'n', 'm', ' ', ' '},
 };
 
-const String Keypad_basic_upper[4][10] = {
-  {"1", "2", "3", "4", "5", "6", "7", "8", "9", "0"},
-  {"Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"},
-  {"A", "S", "D", "F", "G", "H", "J", "K", "L", "Z"},
-  {" ", " ", "X", "C", "V", "B", "N", "M", " ", " "},
+const char Keypad_basic_upper[4][10] PROGMEM = {
+  {'1', '2', '3', '4', '5', '6', '7', '8', '9', '0'},
+  {'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'},
+  {'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', 'Z'},
+  {' ', ' ', 'X', 'C', 'V', 'B', 'N', 'M', ' ', ' '},
 };
 
-const String Keypad_Special[4][10] = {
-  {"[", "]", "{", "}", "#", "%", "^", "*", "+", "="},
-  {"-", "/", ":", ";", "(", ")", "$", "&", "@", "\""},
-  {".", ",", "?", "!", "'",".", ",", "?", "!", "\\"},
-  {" ", " ", "\"","_", "|", "~", "<", ">", " ", " "}
+const char Keypad_Special[4][10] PROGMEM = {
+  {'[', ']', '{', '}', '#', '%', '^', '*', '+', '='},
+  {'-', '/', ':', ';', '(', ')', '$', '&', '@', '"'},
+  {'.', '\,', '?', '!', '\'','.', '\,', '?', '!', '\\'},
+  {' ', ' ', '\'','_', '|', '~', '<', '>', ' ', ' '}
   
 };
 
-void MakeKB_Button(const String Keys[4][10])
+void MakeKB_Button(const char type[][10])
 {
   tft.setTextSize(2);
   tft.setTextColor(HX8357_WHITE, HX8357_BLACK);
@@ -56,14 +56,14 @@ void MakeKB_Button(const String Keys[4][10])
     {
       drawButton(30 + (42 * x),70 + (50 * y), 40, 45);
       tft.setCursor(40 + (42 * x), 85 + (50 * y));
-      tft.print(Keys[y][x]);
+      tft.print(char(pgm_read_byte(&(type[y][x]))));
     }
   }
   for (int x = 2; x < 8; x++)
   {
     drawButton(114 + (42 * (x -2)),220, 40, 45);
     tft.setCursor(124 + (42 * (x -2)), 235);
-    tft.print(Keys[3][x]);
+    tft.print(char(pgm_read_byte(&(type[3][x]))));
   }
   //ShiftKey
   drawButton(30, 220, 82, 45);
@@ -118,9 +118,10 @@ int xLocation(int x)
 }
 
 void setup() {
+  // put your setup code here, to run once:
   int y_div = 0;
   int x_div = 0;
-  String password = "";
+  char password[30] = "";
   int indexBuf = 0;
   
   Serial.begin(9600);
@@ -131,6 +132,9 @@ void setup() {
   tft.fillRect(29, 19, 422, 42, HX8357_BLACK);
   tft.fillRect(30, 20, 420, 40, HX8357_WHITE);
   bool EnterCheck = true;
+
+  // Keyboard interactions
+  
   while(EnterCheck){
     TSPoint p = ts.getPoint();
     if (p.z > 100) {
@@ -139,18 +143,22 @@ void setup() {
       if(p.x >= 70 && p.y >= 30){
         y_div = yLocation(p.x);
         x_div = xLocation(p.y);
+        Serial.println("x div: ");
+        Serial.println(x_div);
+        Serial.println("\ny div: ");
+        Serial.println(y_div);
         if((y_div < 3 && x_div >= 0 && x_div < 10) || (y_div == 3 && x_div > 1 && x_div < 8)){
           if(Special){
-            password += Keypad_Special[y_div][x_div];
+            password[indexBuf] = pgm_read_byte(&(Keypad_Special[y_div][x_div]));
             indexBuf += 1;
           }
           else{
             if(Upper){
-              password += String(Keypad_basic_upper[y_div][x_div]);
+              password[indexBuf] = pgm_read_byte(&(Keypad_basic_upper[y_div][x_div]));
               indexBuf += 1;
             }
             else{
-              password += Keypad_basic_lower[y_div][x_div];
+              password[indexBuf] = pgm_read_byte(&(Keypad_basic_lower[y_div][x_div]));
               indexBuf += 1;
             }
           }
@@ -158,7 +166,7 @@ void setup() {
           tft.setTextSize(2);
           tft.setTextColor(HX8357_BLACK, HX8357_WHITE);
           tft.setCursor(35, 35);
-          tft.println(F(password));
+          tft.println(password);
         }
         else if( y_div ==3 && (x_div == 0 || x_div == 1)){
           if(!Special){
@@ -191,7 +199,8 @@ void setup() {
           }
         }
         else if(y_div == 3 && (x_div == 8 || x_div == 9)){
-          password.remove(indexBuf - 1);
+          password[indexBuf - 1] = NULL
+          ;
           indexBuf -= 1;
 
           tft.fillRect(30, 20, 420, 40, HX8357_WHITE);
@@ -204,8 +213,9 @@ void setup() {
           EnterCheck = false;
         }
         else if(y_div == 4 && (x_div > 1 && x_div < 8)){
-          password += " ";
+          password[indexBuf] = ' ';
           indexBuf += 1;
+          Serial.println("Ran space");
           delay(100);
         }
         else{

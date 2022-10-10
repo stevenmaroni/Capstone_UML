@@ -1,15 +1,9 @@
-#include <Adafruit_GFX.h>
+#include <Adafruit_GFX.h>    // Core graphics library
 #include <SPI.h>
 #include "Adafruit_HX8357.h"
 #include "TouchScreen.h"
-#include <avr/pgmspace.h>
-#include <WiFiNINA.h>
-#include "AnotherIFTTTWebhook.h"
 
-
-///////////////////////////
-// Touch Screen Variables
-//////////////////////////
+// These are the four touchscreen analog pins
 #define YP A2
 #define XM A3
 #define YM 7
@@ -28,44 +22,31 @@ bool Special = false;
 Adafruit_HX8357 tft = Adafruit_HX8357(TFT_CS, TFT_DC, TFT_RST);
 TouchScreen ts = TouchScreen(XP, YP, XM, YM, 300);
 
-/////////////////////////
-// Other Variables
-/////////////////////////
+#include <avr/pgmspace.h>
 
-int wifiLED = 5;
-int wifiPin = 4;
-int testLED = 3;
-int testPin = 2;
-int WifiVal = 0;
-int testVal = 0;
-
-////////////////////////////////
-// Keyboard Setup and Functions
-////////////////////////////////
-
-const char Keypad_basic_lower[4][10] PROGMEM = {
-  {'1', '2', '3', '4', '5', '6', '7', '8', '9', '0'},
-  {'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'},
-  {'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', 'z'},
-  {' ', ' ', 'x', 'c', 'v', 'b', 'n', 'm', ' ', ' '},
+const String Keypad_basic_lower[4][10] = {
+  {"1", "2", "3", "4", "5", "6", "7", "8", "9", "0"},
+  {"q", "w", "e", "r", "t", "y", "u", "i", "o", "p"},
+  {"a", "s", "d", "f", "g", "h", "j", "k", "l", "z"},
+  {" ", " ", "x", "c", "v", "b", "n", "m", " ", " "},
 };
 
-const char Keypad_basic_upper[4][10] PROGMEM = {
-  {'1', '2', '3', '4', '5', '6', '7', '8', '9', '0'},
-  {'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'},
-  {'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', 'Z'},
-  {' ', ' ', 'X', 'C', 'V', 'B', 'N', 'M', ' ', ' '},
+const String Keypad_basic_upper[4][10] = {
+  {"1", "2", "3", "4", "5", "6", "7", "8", "9", "0"},
+  {"Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"},
+  {"A", "S", "D", "F", "G", "H", "J", "K", "L", "Z"},
+  {" ", " ", "X", "C", "V", "B", "N", "M", " ", " "},
 };
 
-const char Keypad_Special[4][10] PROGMEM = {
-  {'[', ']', '{', '}', '#', '%', '^', '*', '+', '='},
-  {'-', '/', ':', ';', '(', ')', '$', '&', '@', '"'},
-  {'.', '\,', '?', '!', '\'','.', '\,', '?', '!', '\\'},
-  {' ', ' ', '\'','_', '|', '~', '<', '>', ' ', ' '}
+const String Keypad_Special[4][10] = {
+  {"[", "]", "{", "}", "#", "%", "^", "*", "+", "="},
+  {"-", "/", ":", ";", "(", ")", "$", "&", "@", "\""},
+  {".", ",", "?", "!", "'",".", ",", "?", "!", "\\"},
+  {" ", " ", "'","_", "|", "~", "<", ">", " ", " "}
   
 };
 
-void MakeKB_Button(const char type[][10])
+void MakeKB_Button(const String Keys[4][10])
 {
   tft.setTextSize(2);
   tft.setTextColor(HX8357_WHITE, HX8357_BLACK);
@@ -75,14 +56,14 @@ void MakeKB_Button(const char type[][10])
     {
       drawButton(30 + (42 * x),70 + (50 * y), 40, 45);
       tft.setCursor(40 + (42 * x), 85 + (50 * y));
-      tft.print(char(pgm_read_byte(&(type[y][x]))));
+      tft.print(Keys[y][x]);
     }
   }
   for (int x = 2; x < 8; x++)
   {
     drawButton(114 + (42 * (x -2)),220, 40, 45);
     tft.setCursor(124 + (42 * (x -2)), 235);
-    tft.print(char(pgm_read_byte(&(type[3][x]))));
+    tft.print(Keys[3][x]);
   }
   //ShiftKey
   drawButton(30, 220, 82, 45);
@@ -136,20 +117,20 @@ int xLocation(int x)
   return floor((x - 30)/42);
 }
 
-char Get_wifi_password(){
+void setup() {
   int y_div = 0;
   int x_div = 0;
-  char password[30] = "";
+  String password = "";
   int indexBuf = 0;
+  
+  Serial.begin(9600);
+  tft.begin();
   tft.fillScreen(HX8357_CYAN);
   tft.setRotation(1);
   MakeKB_Button(Keypad_basic_upper);
   tft.fillRect(29, 19, 422, 42, HX8357_BLACK);
   tft.fillRect(30, 20, 420, 40, HX8357_WHITE);
   bool EnterCheck = true;
-
-  // Keyboard interactions
-  
   while(EnterCheck){
     TSPoint p = ts.getPoint();
     if (p.z > 100) {
@@ -160,16 +141,16 @@ char Get_wifi_password(){
         x_div = xLocation(p.y);
         if((y_div < 3 && x_div >= 0 && x_div < 10) || (y_div == 3 && x_div > 1 && x_div < 8)){
           if(Special){
-            password[indexBuf] = pgm_read_byte(&(Keypad_Special[y_div][x_div]));
+            password += Keypad_Special[y_div][x_div];
             indexBuf += 1;
           }
           else{
             if(Upper){
-              password[indexBuf] = pgm_read_byte(&(Keypad_basic_upper[y_div][x_div]));
+              password += Keypad_basic_upper[y_div][x_div];
               indexBuf += 1;
             }
             else{
-              password[indexBuf] = pgm_read_byte(&(Keypad_basic_lower[y_div][x_div]));
+              password += Keypad_basic_lower[y_div][x_div];
               indexBuf += 1;
             }
           }
@@ -177,7 +158,7 @@ char Get_wifi_password(){
           tft.setTextSize(2);
           tft.setTextColor(HX8357_BLACK, HX8357_WHITE);
           tft.setCursor(35, 35);
-          tft.println(password);
+          tft.println(F(password));
         }
         else if( y_div ==3 && (x_div == 0 || x_div == 1)){
           if(!Special){
@@ -210,8 +191,7 @@ char Get_wifi_password(){
           }
         }
         else if(y_div == 3 && (x_div == 8 || x_div == 9)){
-          password[indexBuf - 1] = NULL
-          ;
+          password.remove(indexBuf - 1);
           indexBuf -= 1;
 
           tft.fillRect(30, 20, 420, 40, HX8357_WHITE);
@@ -224,7 +204,7 @@ char Get_wifi_password(){
           EnterCheck = false;
         }
         else if(y_div == 4 && (x_div > 1 && x_div < 8)){
-          password[indexBuf] = ' ';
+          password += " ";
           indexBuf += 1;
           delay(100);
         }
@@ -235,37 +215,12 @@ char Get_wifi_password(){
     }
     
   }
-  return password;
-}
-
-//////////////////////////////
-// Wifi Selection Function
-///////////////////////////////
-int Wifi_Selection(){
-  if (WiFi.status() == WL_NO_MODULE) {
-    Serial.println("Communication with WiFi module failed!");
-  }
-
-  int numSsid = WiFi.scanNetworks();
-  printWifiSelection()
+  tft.fillScreen(HX8357_BLACK);
+  tft.setTextSize(4);
+  tft.setTextColor(HX8357_WHITE, HX8357_BLACK);
+  tft.setCursor(35, 35);
+  tft.println(F(password));
   
-}
-
-void printWifiSelection(){
-  
-}
-
-/////////////////////////////
-// Start of Main
-/////////////////////////////
-void setup() {
-  char password[30];
-  Serial.begin(9600);
-  tft.begin();
-  while (!Serial) {
-    continue;
-  }
-  password = Get_wifi_password();
 }
 
 void loop() {
