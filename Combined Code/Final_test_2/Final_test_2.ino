@@ -4,7 +4,6 @@
 #include "TouchScreen.h"
 #include <avr/pgmspace.h>
 #include <WiFiNINA.h>
-#include "AnotherIFTTTWebhook.h"
 
 
 ///////////////////////////
@@ -24,6 +23,7 @@
 #define TS_MAXY 940
 bool Upper;
 bool Special;
+WiFiClient client;
 
 Adafruit_HX8357 tft = Adafruit_HX8357(TFT_CS, TFT_DC, TFT_RST);
 TouchScreen ts = TouchScreen(XP, YP, XM, YM, 300);
@@ -45,8 +45,6 @@ bool PressedWiFi = false;
 bool PressedTest = false;
 unsigned long TimePassedWiFi;
 unsigned long TimePassedTest;
-
-int stat = WL_IDLE_STATUS;
 ////////////////////////////////
 // Keyboard Setup and Functions
 ////////////////////////////////
@@ -143,8 +141,11 @@ char* Get_wifi_password(){
   Special = false;
   int y_div = 0;
   int x_div = 0;
-  static char password[30] = "";
+  static char password[30];
   int indexBuf = 0;
+  for(int l; l < 30; l++){
+    password[l] = '\0';
+  }
   tft.fillScreen(HX8357_CYAN);
   tft.setRotation(1);
   MakeKB_Button(Keypad_basic_upper);
@@ -153,7 +154,8 @@ char* Get_wifi_password(){
   bool EnterCheck = true;
 
   // Keyboard interactions
-  
+  Upper = true;
+  Special = false;
   while(EnterCheck){
     TSPoint p = ts.getPoint();
     if (p.z > 100) {
@@ -275,7 +277,7 @@ int Wifi_Selection(){
               return ((page *5));
             }
           }
-          else if( p.x >= 70 && p.x < 130){
+          else if( p.x >= 70 && p.x < 130 ){
             if(WiFiConfirm(1)){
               return ((page *5)+1);
             }
@@ -286,8 +288,10 @@ int Wifi_Selection(){
             }
           }
           else if( p.x >= 190 && p.x < 250){
-            if(WiFiConfirm(3)){
-              return ((page *5)+3);
+            if((((page*5) +3) < numNetworks)){
+              if(WiFiConfirm(3)){
+                return ((page *5)+3);
+              }
             }
           }
           else if( p.x >= 250 && p.x <= 310){
@@ -388,10 +392,101 @@ bool WiFiConfirm(int index){
 // Common Functions
 /////////////////////////////
 
+void Wifi_Setup(void){
+  int stat = WL_IDLE_STATUS;
+  int WifiIndex = 0;
+  char* password = "";
+  WifiIndex = Wifi_Selection();
+  if(WiFi.encryptionType(WifiIndex) != ENC_TYPE_NONE){
+    password = Get_wifi_password();
+  }
+  tft.fillScreen(HX8357_CYAN);
+  tft.setTextColor(HX8357_BLACK, HX8357_CYAN);
+  tft.setTextSize(4);
+  tft.setCursor(25, 100);
+  tft.println("Connecting Wifi...");
+  if(WiFi.encryptionType(WifiIndex) == ENC_TYPE_NONE){
+    stat = WiFi.begin(WiFi.SSID(WifiIndex));
+    delay(5000);
+    if( WiFi.status() != WL_CONNECTED){
+      delay(5000);
+      if( WiFi.status() != WL_CONNECTED){
+        delay(5000);
+      }
+    }
+  }
+  else{
+    stat = WiFi.begin(WiFi.SSID(WifiIndex), password);
+    delay(5000);
+    if( WiFi.status() != WL_CONNECTED){
+      delay(5000);
+      if( WiFi.status() != WL_CONNECTED){
+        delay(5000);
+      }
+    }
+  }
+
+  if( stat != WL_CONNECTED){
+    MainMenu(0);
+  }
+  else{
+    MainMenu(1);
+  }
+}
+
 void drawButton(int x, int y, int w, int h)
 {
   tft.fillRoundRect(x, y, w, h, 3, HX8357_WHITE);
   tft.fillRoundRect(x + 1, y + 1, w - 1 * 2, h - 1 * 2, 3, HX8357_BLACK);
+}
+
+void MainMenu(int type){
+  tft.fillScreen(HX8357_CYAN);
+  tft.setTextSize(2);
+  tft.setTextColor(HX8357_BLACK, HX8357_CYAN);
+  if(type == 0){
+    tft.fillTriangle(140, 200, 240, 80, 340, 200,HX8357_WHITE);
+    tft.setCursor(150, 210);
+    tft.print("Active, No Wifi");
+  }
+  if (type == 1){
+    tft.fillTriangle(140, 200, 240, 80, 340, 200,HX8357_GREEN);
+    tft.setCursor(150, 210);
+    tft.print("Active With Wifi");
+  }
+}
+
+void send_webhook(String IFTTT_Event, String IFTTT_Key, String IFTTT_Value1, String IFTTT_Value2, String IFTTT_Value3){
+  // construct the JSON payload
+  String jsonString = "";
+  String postString = "";
+  String lenString;
+  int jsonLength;
+  jsonString += "{\"value1\":\"";
+  jsonString += IFTTT_Value1;
+  jsonString += "\",\"value2\":\"";
+  jsonString += IFTTT_Value2;
+  jsonString += "\",\"value3\":\"";
+  jsonString += IFTTT_Value3;
+  jsonString += "\"}";
+  jsonLength = jsonString.length();  
+  lenString = String(jsonLength);
+  postString += "POST /trigger/";
+  postString += IFTTT_Event;
+  postString += "/with/key/";
+  postString += IFTTT_Key;
+  postString += " HTTP/1.1\r\n";
+  postString += "Host: maker.ifttt.com\r\n";
+  postString += "Content-Type: application/json\r\n";
+  postString += "Content-Length: ";
+  postString += lenString + "\r\n";
+  postString += "\r\n";
+  postString += jsonString; // combine post request and JSON
+  
+  client.connect("maker.ifttt.com", 80);
+  client.print(postString);
+  delay(500);
+  client.stop();
 }
 
 /////////////////////////////
@@ -400,6 +495,16 @@ void drawButton(int x, int y, int w, int h)
 void setup() {
   pinMode(LEDIndicator, OUTPUT);
   digitalWrite(LEDIndicator, HIGH);
+  pinMode(wifiPin, INPUT);
+  pinMode(testVal, INPUT);
+  pinMode(wifiLED, OUTPUT);
+  pinMode(testLED, OUTPUT);
+  pinMode(LEDPin, OUTPUT);
+  pinMode(ShakerPin, OUTPUT);
+  Serial.begin(9600);
+  tft.begin();
+  Wifi_Setup();
+  /*
   int WifiIndex;
   char* password = "";
   Serial.begin(9600);
@@ -428,19 +533,81 @@ void setup() {
     }
   }
   tft.fillScreen(HX8357_CYAN);
-  pinMode(wifiPin, INPUT);
-  pinMode(testVal, INPUT);
-  pinMode(wifiLED, OUTPUT);
-  pinMode(testLED, OUTPUT);
-  pinMode(LEDPin, OUTPUT);
-  pinMode(ShakerPin, OUTPUT);
   tft.setTextSize(4);
   tft.setTextColor(HX8357_BLACK, HX8357_CYAN);
   tft.setCursor(50, 100);
   tft.println(F("Demo of Buttons"));
+  */
 }
 
 void loop() {
+  int runs = 0;
+  bool check;
+  
+  if(analogRead(A1) >= 120){
+    check = true;
+    while(runs < 4 && check){
+      delay(100);
+      if(analogRead(A1) >= 120){
+        runs = runs + 1;
+      }
+      else{
+        check = false;
+      }
+    }
+    if(check){
+      delay(350);
+      if(analogRead(A1) >= 120){
+        check = false;
+      }
+      delay(100);
+      if(analogRead(A1) >= 120){
+        check = false;
+      }
+      delay(350);
+      if(analogRead(A1) <= 120){
+        check = false;
+      }
+      delay(100);
+      if(analogRead(A1) <= 120){
+        check = false;
+      }
+      if(check){
+        digitalWrite(wifiLED, LOW);
+        digitalWrite(testLED, LOW);
+        digitalWrite(LEDPin, HIGH);
+        digitalWrite(ShakerPin, HIGH);
+        send_webhook("Fire_Alarm", "9ELX13sgd-VdwIj4UlUoW", "","","");
+        tft.fillScreen(HX8357_RED);
+        tft.setTextColor(HX8357_WHITE, HX8357_RED);
+        tft.println(F("Test Activated!\nPress Test Button for 5 secs to return"));
+        PressedTest = false;
+        while(!PressedTest || (millis() - TimePassedTest) <= 5000){
+          testVal = digitalRead(testPin);
+          digitalWrite(testLED, testVal);
+          if(!PressedTest && testVal == HIGH){
+            PressedTest = true;
+            TimePassedTest = millis();
+          }
+          else if(PressedTest && testVal == HIGH){
+          }
+          else if(PressedTest && testVal == LOW){
+            PressedTest = false;
+          }
+        }
+        digitalWrite(LEDPin, LOW);
+        digitalWrite(ShakerPin, LOW);
+        PressedTest = false;
+        PressedWiFi = false;
+        if(WiFi.status() == WL_CONNECTED){
+          MainMenu(1);
+        }
+        else{
+          MainMenu(0);
+        }
+      }
+    }
+  }
   WifiVal = digitalRead(wifiPin);
   testVal = digitalRead(testPin);
   digitalWrite(wifiLED, WifiVal);
@@ -506,8 +673,13 @@ void loop() {
   if(PressedWiFi && (millis() - TimePassedWiFi) > 5000){
     digitalWrite(wifiLED, LOW);
     digitalWrite(testLED, LOW);
+    tft.fillScreen(HX8357_CYAN);
+    tft.setTextSize(4);
+    tft.setTextColor(HX8357_BLACK, HX8357_CYAN);
+    tft.setCursor(50, 100);
+    tft.println(F("Loading..."));
     PressedTest = false;
     PressedWiFi = false;
-    setup();
+    Wifi_Setup();
   }
 }
