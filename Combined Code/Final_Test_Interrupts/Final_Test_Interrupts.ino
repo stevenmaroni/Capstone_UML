@@ -32,17 +32,14 @@ TouchScreen ts = TouchScreen(XP, YP, XM, YM, 300);
 // PIN and other varaiables 
 /////////////////////////
 int wifiPin = 4;
+int testLED = 5;
 int testPin = 11;
 int LEDPin = 6;
 int ShakerPin = 3;
 int LEDIndicator = 2;
-int WifiVal = 0;
-int testVal = 0;
-bool PressedWiFi = false;
-bool PressedTest = false;
-unsigned long TimePassedWiFi;
-unsigned long TimePassedTest;
 unsigned long TimePassedAlarm;
+bool Aware;
+bool ActiveFire = false;
 ////////////////////////////////
 // Keyboard Setup and Functions
 ////////////////////////////////
@@ -218,7 +215,7 @@ char* Get_wifi_password(){
           }
         }
         else if(y_div == 3 && (x_div == 8 || x_div == 9)){
-          password[indexBuf - 1] = '\0'
+          password[indexBuf - 1] = NULL
           ;
           indexBuf -= 1;
 
@@ -503,14 +500,87 @@ void send_webhook(String IFTTT_Event, String IFTTT_Key, String IFTTT_Value1, Str
   client.stop();
 }
 
+void TestMode(){
+  unsigned long TimePassedTest = millis();
+  int testVal = HIGH;
+  bool RunTest = false;
+  bool PressedTest = false;
+  if(ActiveFire){
+    Aware = true;
+    return;
+  }
+  digitalWrite(testLED, HIGH);
+  while(testVal == HIGH){
+    testVal = digitalRead(testPin);
+    if((millis() - TimePassedTest) > 5000){
+      RunTest = true;
+      break;
+    }
+  }
+  digitalWrite(testLED, LOW);
+  if(RunTest){
+    
+    digitalWrite(LEDPin, HIGH);
+    digitalWrite(ShakerPin, HIGH);
+    MainMenu(2);
+    PressedTest = false;
+    while(!PressedTest || (millis() - TimePassedTest) <= 5000){
+      testVal = digitalRead(testPin);
+      if(!PressedTest && testVal == HIGH){
+        PressedTest = true;
+        TimePassedTest = millis();
+      }
+      else if(PressedTest && testVal == HIGH){
+      }
+      else if(PressedTest && testVal == LOW){
+        PressedTest = false;
+      }
+    }
+    digitalWrite(LEDPin, LOW);
+    digitalWrite(ShakerPin, LOW);
+    if(WiFi.status() == WL_CONNECTED){
+      MainMenu(1);
+    }
+    else{
+      MainMenu(0);
+    }
+  }
+}
+
+void WiFiMode(){
+  digitalWrite(testLED, HIGH);
+  int WifiVal = HIGH;
+  unsigned long TimePassedWiFi;
+  bool RunTest = false;
+  TimePassedWiFi = millis();
+  while(WifiVal == HIGH){
+    WifiVal = digitalRead(wifiPin);
+    if((millis() - TimePassedWiFi) > 5000){
+      RunTest = true;
+      break;
+    }
+  }
+  digitalWrite(testLED, LOW);
+  if(RunTest){
+    tft.fillScreen(HX8357_CYAN);
+    tft.setTextSize(4);
+    tft.setTextColor(HX8357_BLACK, HX8357_CYAN);
+    tft.setCursor(50, 100);
+    tft.println(F("Loading..."));
+    Wifi_Setup();
+  }
+}
 /////////////////////////////
 // Start of Main
 /////////////////////////////
 void setup() {
+  pinMode(testLED, OUTPUT);
   pinMode(LEDIndicator, OUTPUT);
   digitalWrite(LEDIndicator, HIGH);
-  pinMode(wifiPin, INPUT);
-  pinMode(testVal, INPUT);
+  pinMode(wifiPin, INPUT_PULLUP);
+  pinMode(testPin, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(testPin), TestMode, RISING);
+  attachInterrupt(digitalPinToInterrupt(wifiPin), WiFiMode, RISING);
   pinMode(LEDPin, OUTPUT);
   pinMode(ShakerPin, OUTPUT);
   Serial.begin(9600);
@@ -562,14 +632,14 @@ void loop() {
       delay(100);
       if(analogRead(A1) >= 120){
         runs = runs + 1;
+        break;
       }
       else{
         check = false;
-        break;
       }
     }
     if(check){
-      delay(300);
+      delay(350);
       if(analogRead(A1) >= 120){
         check = false;
       }
@@ -577,51 +647,47 @@ void loop() {
       if(analogRead(A1) >= 120){
         check = false;
       }
+      delay(350);
+      if(analogRead(A1) <= 120){
+        check = false;
+      }
+      delay(100);
+      if(analogRead(A1) <= 120){
+        check = false;
+      }
       if(check){
-        delay(300);
-        if(analogRead(A1) <= 120){
-          check = false;
-        }
-        delay(100);
-        if(analogRead(A1) <= 120){
-          check = false;
-        }
-        if(check){
-          digitalWrite(LEDPin, HIGH);
-          digitalWrite(ShakerPin, HIGH);
-          TimePassedAlarm = millis();
-          send_webhook("Fire_Alarm", "9ELX13sgd-VdwIj4UlUoW", "","","");
-          MainMenu(3);
-          testVal = LOW;
-          while(testVal != HIGH){
-            testVal = digitalRead(testPin);
-            testVal = digitalRead(testPin);
-            if((millis() - TimePassedAlarm) > 500){
-              digitalWrite(LEDPin, LOW);
-              digitalWrite(ShakerPin, LOW);
-            }
-        
-            if((millis() - TimePassedAlarm) > 1000){
-              digitalWrite(LEDPin, HIGH);
-              digitalWrite(ShakerPin, HIGH);
-              TimePassedAlarm = millis();
-            }
-            
+        digitalWrite(LEDPin, HIGH);
+        digitalWrite(ShakerPin, HIGH);
+        TimePassedAlarm = millis();
+        send_webhook("Fire_Alarm", "9ELX13sgd-VdwIj4UlUoW", "","","");
+        MainMenu(3);
+        Aware = false;
+        ActiveFire = true;
+        while(Aware == false){
+          if((millis() - TimePassedAlarm) > 5000){
+            digitalWrite(LEDPin, LOW);
+            digitalWrite(ShakerPin, LOW);
           }
-          digitalWrite(LEDPin, LOW);
-          digitalWrite(ShakerPin, LOW);
-          PressedTest = false;
-          PressedWiFi = false;
-          if(WiFi.status() == WL_CONNECTED){
-            MainMenu(1);
-          }
-          else{
-            MainMenu(0);
+
+          if((millis() - TimePassedAlarm) > 5000){
+            digitalWrite(LEDPin, HIGH);
+            digitalWrite(ShakerPin, HIGH);
+            TimePassedAlarm = millis();
           }
         }
+        digitalWrite(LEDPin, LOW);
+        digitalWrite(ShakerPin, LOW);
+        if(WiFi.status() == WL_CONNECTED){
+          MainMenu(1);
+        }
+        else{
+          MainMenu(0);
+        }
+        ActiveFire = false;
       }
     }
   }
+  /*
   WifiVal = digitalRead(wifiPin);
   testVal = digitalRead(testPin);
   
@@ -636,7 +702,7 @@ void loop() {
     PressedWiFi = false;
   }
   //Wifi Check
-  else if(PressedWiFi && (millis() - TimePassedWiFi) > 5000){
+  else if(PressedWiFi && (millis() - TimePassedWiFi) > 5000){d
     tft.fillScreen(HX8357_CYAN);
     tft.setTextSize(4);
     tft.setTextColor(HX8357_BLACK, HX8357_CYAN);
@@ -646,11 +712,10 @@ void loop() {
     PressedWiFi = false;
     Wifi_Setup();
   }
-
   //Test Button
   if(!PressedTest && testVal == LOW){
   }
-  else if(!PressedTest && testVal == HIGH){
+  if(!PressedTest && testVal == HIGH){
     PressedTest = true;
     TimePassedTest = millis();
   }
@@ -660,42 +725,11 @@ void loop() {
   //Test Check
   else if(PressedTest && ((millis() - TimePassedTest) > 5000)){
     digitalWrite(LEDPin, HIGH);
-    TimePassedAlarm = millis();
     digitalWrite(ShakerPin, HIGH);
     MainMenu(2);
     PressedTest = false;
     while(!PressedTest || (millis() - TimePassedTest) <= 5000){
       testVal = digitalRead(testPin);
-      if((millis() - TimePassedAlarm) > 500 && (millis() - TimePassedAlarm) < 1000){
-        digitalWrite(LEDPin, LOW);
-        digitalWrite(ShakerPin, LOW);
-      }
-      else if((millis() - TimePassedAlarm) > 1000 && (millis() - TimePassedAlarm) < 1500){
-        digitalWrite(LEDPin, HIGH);
-        digitalWrite(ShakerPin, HIGH);
-      }
-      else if((millis() - TimePassedAlarm) > 1500  && (millis() - TimePassedAlarm) < 2000){
-        digitalWrite(LEDPin, LOW);
-        digitalWrite(ShakerPin, LOW);
-      }
-      else if((millis() - TimePassedAlarm) > 2000  && (millis() - TimePassedAlarm) < 2500){
-        digitalWrite(LEDPin, HIGH);
-        digitalWrite(ShakerPin, HIGH);
-      }
-      else if((millis() - TimePassedAlarm) > 2500  && (millis() - TimePassedAlarm) < 3000){
-        digitalWrite(LEDPin, LOW);
-        digitalWrite(ShakerPin, LOW);
-      }
-      else if((millis() - TimePassedAlarm) > 3000  && (millis() - TimePassedAlarm) < 3500){
-        digitalWrite(LEDPin, HIGH);
-        digitalWrite(ShakerPin, HIGH);
-      }
-      else if((millis() - TimePassedAlarm) > 3500){
-        digitalWrite(LEDPin, LOW);
-        digitalWrite(ShakerPin, LOW);
-        TimePassedAlarm = millis();
-      }
-      
       if(!PressedTest && testVal == HIGH){
         PressedTest = true;
         TimePassedTest = millis();
@@ -717,4 +751,5 @@ void loop() {
       MainMenu(0);
     }
   }
+  */
 }

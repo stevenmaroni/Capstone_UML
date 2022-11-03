@@ -218,7 +218,7 @@ char* Get_wifi_password(){
           }
         }
         else if(y_div == 3 && (x_div == 8 || x_div == 9)){
-          password[indexBuf - 1] = '\0'
+          password[indexBuf - 1] = NULL
           ;
           indexBuf -= 1;
 
@@ -558,18 +558,19 @@ void loop() {
   
   if(analogRead(A1) >= 120){
     check = true;
-    while(runs < 4 && check){
+    TimePassedAlarm = millis();
+    while((millis() - TimePassedAlarm) < 500){
       delay(100);
       if(analogRead(A1) >= 120){
-        runs = runs + 1;
       }
       else{
         check = false;
         break;
       }
+      while((millis() - TimePassedAlarm) < 500)
     }
     if(check){
-      delay(300);
+      delay(100);
       if(analogRead(A1) >= 120){
         check = false;
       }
@@ -578,46 +579,37 @@ void loop() {
         check = false;
       }
       if(check){
-        delay(300);
-        if(analogRead(A1) <= 120){
-          check = false;
+        while((millis() - TimePassedAlarm) < 1000){
+          delay(100);
         }
-        delay(100);
-        if(analogRead(A1) <= 120){
-          check = false;
-        }
-        if(check){
-          digitalWrite(LEDPin, HIGH);
-          digitalWrite(ShakerPin, HIGH);
-          TimePassedAlarm = millis();
-          send_webhook("Fire_Alarm", "9ELX13sgd-VdwIj4UlUoW", "","","");
-          MainMenu(3);
-          testVal = LOW;
-          while(testVal != HIGH){
-            testVal = digitalRead(testPin);
-            testVal = digitalRead(testPin);
-            if((millis() - TimePassedAlarm) > 500){
-              digitalWrite(LEDPin, LOW);
-              digitalWrite(ShakerPin, LOW);
-            }
-        
-            if((millis() - TimePassedAlarm) > 1000){
-              digitalWrite(LEDPin, HIGH);
-              digitalWrite(ShakerPin, HIGH);
-              TimePassedAlarm = millis();
-            }
-            
-          }
-          digitalWrite(LEDPin, LOW);
-          digitalWrite(ShakerPin, LOW);
-          PressedTest = false;
-          PressedWiFi = false;
-          if(WiFi.status() == WL_CONNECTED){
-            MainMenu(1);
+        while((millis() - TimePassedAlarm) < 1500){
+          delay(100);
+          if(analogRead(A1) >= 120){
           }
           else{
-            MainMenu(0);
+            check = false;
+            break;
           }
+        }
+      if(check){
+        digitalWrite(LEDPin, HIGH);
+        digitalWrite(ShakerPin, HIGH);
+        TimePassedAlarm = millis();
+        send_webhook("Fire_Alarm", "9ELX13sgd-VdwIj4UlUoW", "","","");
+        MainMenu(3);
+        testVal = LOW;
+        while(testVal != HIGH){
+          testVal = digitalRead(testPin);
+        }
+        digitalWrite(LEDPin, LOW);
+        digitalWrite(ShakerPin, LOW);
+        PressedTest = false;
+        PressedWiFi = false;
+        if(WiFi.status() == WL_CONNECTED){
+          MainMenu(1);
+        }
+        else{
+          MainMenu(0);
         }
       }
     }
@@ -660,42 +652,11 @@ void loop() {
   //Test Check
   else if(PressedTest && ((millis() - TimePassedTest) > 5000)){
     digitalWrite(LEDPin, HIGH);
-    TimePassedAlarm = millis();
     digitalWrite(ShakerPin, HIGH);
     MainMenu(2);
     PressedTest = false;
     while(!PressedTest || (millis() - TimePassedTest) <= 5000){
       testVal = digitalRead(testPin);
-      if((millis() - TimePassedAlarm) > 500 && (millis() - TimePassedAlarm) < 1000){
-        digitalWrite(LEDPin, LOW);
-        digitalWrite(ShakerPin, LOW);
-      }
-      else if((millis() - TimePassedAlarm) > 1000 && (millis() - TimePassedAlarm) < 1500){
-        digitalWrite(LEDPin, HIGH);
-        digitalWrite(ShakerPin, HIGH);
-      }
-      else if((millis() - TimePassedAlarm) > 1500  && (millis() - TimePassedAlarm) < 2000){
-        digitalWrite(LEDPin, LOW);
-        digitalWrite(ShakerPin, LOW);
-      }
-      else if((millis() - TimePassedAlarm) > 2000  && (millis() - TimePassedAlarm) < 2500){
-        digitalWrite(LEDPin, HIGH);
-        digitalWrite(ShakerPin, HIGH);
-      }
-      else if((millis() - TimePassedAlarm) > 2500  && (millis() - TimePassedAlarm) < 3000){
-        digitalWrite(LEDPin, LOW);
-        digitalWrite(ShakerPin, LOW);
-      }
-      else if((millis() - TimePassedAlarm) > 3000  && (millis() - TimePassedAlarm) < 3500){
-        digitalWrite(LEDPin, HIGH);
-        digitalWrite(ShakerPin, HIGH);
-      }
-      else if((millis() - TimePassedAlarm) > 3500){
-        digitalWrite(LEDPin, LOW);
-        digitalWrite(ShakerPin, LOW);
-        TimePassedAlarm = millis();
-      }
-      
       if(!PressedTest && testVal == HIGH){
         PressedTest = true;
         TimePassedTest = millis();
