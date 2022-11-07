@@ -16,34 +16,37 @@
 #define TFT_RST -1
 #define TFT_DC 9
 #define TFT_CS 10
-
 #define TS_MINX 110
 #define TS_MINY 80
 #define TS_MAXX 900
 #define TS_MAXY 940
 bool Upper;
 bool Special;
-WiFiClient client;
-
 Adafruit_HX8357 tft = Adafruit_HX8357(TFT_CS, TFT_DC, TFT_RST);
 TouchScreen ts = TouchScreen(XP, YP, XM, YM, 300);
-
 /////////////////////////
 // PIN and other varaiables 
 /////////////////////////
 int wifiPin = 4;
-int testLED = 5;
 int testPin = 11;
 int LEDPin = 6;
 int ShakerPin = 3;
 int LEDIndicator = 2;
+int WifiVal = 0;
+int testVal = 0;
+bool PressedWiFi = false;
+bool PressedTest = false;
+bool ScreenOff = false;
+unsigned long TimePassedWiFi;
+unsigned long TimePassedTest;
 unsigned long TimePassedAlarm;
-bool Aware;
-bool ActiveFire = false;
+unsigned long TimeIdle;
+WiFiClient client;
 ////////////////////////////////
 // Keyboard Setup and Functions
 ////////////////////////////////
 
+// Lower Case Keyboard
 const char Keypad_basic_lower[4][10] PROGMEM = {
   {'1', '2', '3', '4', '5', '6', '7', '8', '9', '0'},
   {'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'},
@@ -51,6 +54,7 @@ const char Keypad_basic_lower[4][10] PROGMEM = {
   {' ', ' ', 'x', 'c', 'v', 'b', 'n', 'm', ' ', ' '},
 };
 
+// Upper Case Keyboard
 const char Keypad_basic_upper[4][10] PROGMEM = {
   {'1', '2', '3', '4', '5', '6', '7', '8', '9', '0'},
   {'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'},
@@ -58,19 +62,20 @@ const char Keypad_basic_upper[4][10] PROGMEM = {
   {' ', ' ', 'X', 'C', 'V', 'B', 'N', 'M', ' ', ' '},
 };
 
+// Symbols Keyboard
 const char Keypad_Special[4][10] PROGMEM = {
   {'[', ']', '{', '}', '#', '%', '^', '*', '+', '='},
   {'-', '/', ':', ';', '(', ')', '$', '&', '@', '"'},
-  {'.', '\,', '?', '!', '\'','.', '\,', '?', '!', '\\'},
-  {' ', ' ', '\'','_', '|', '~', '<', '>', ' ', ' '}
-  
+  {'.', ',', '?', '!', '\'','.', ',', '?', '!', '\\'},
+  {' ', ' ', '\"','_', '|', '~', '<', '>', ' ', ' '}
 };
-
 void MakeKB_Button(const char type[][10])
 {
+  // Text Setup
   tft.setTextSize(2);
   tft.setTextColor(HX8357_WHITE, HX8357_BLACK);
-  for (int y = 0; y < 3; y++)
+  // Create all of the keyboard buttons above
+  for (int y = 0; y < 3; y++) // Row 1 - 3
   {
     for (int x = 0; x < 10; x++)
     {
@@ -79,13 +84,13 @@ void MakeKB_Button(const char type[][10])
       tft.print(char(pgm_read_byte(&(type[y][x]))));
     }
   }
-  for (int x = 2; x < 8; x++)
+  for (int x = 2; x < 8; x++) // Row 4
   {
     drawButton(114 + (42 * (x -2)),220, 40, 45);
     tft.setCursor(124 + (42 * (x -2)), 235);
     tft.print(char(pgm_read_byte(&(type[3][x]))));
   }
-  //ShiftKey
+  // Create ShiftKey
   drawButton(30, 220, 82, 45);
   tft.setCursor(35, 235);
   if(Upper){
@@ -95,7 +100,7 @@ void MakeKB_Button(const char type[][10])
     tft.print(F("UPPER"));
   }
 
-  //Special Characters
+  // Create Special Swap button
   drawButton(30, 270, 82, 45);
   tft.setCursor(35, 290);
   if(Special){
@@ -105,22 +110,23 @@ void MakeKB_Button(const char type[][10])
     tft.print(F("Symbol"));
   }
 
-  //BackSpace
+  // Create BackSpace
   drawButton(366, 220, 82, 45);
   tft.setCursor(371, 235);
   tft.print(F("Back"));
 
-  //Return
+  // Create Enter
   drawButton(366, 270, 82, 45);
   tft.setCursor(371, 290);
   tft.print(F("Enter"));
 
-  //Spacebar
+  // Create Spacebar
   drawButton(114, 270, 252, 45);
   tft.setCursor(170, 290);
   tft.print(F("SPACE BAR"));
 }
 
+// Functions used to split up the sections of the keyboard
 int yLocation(int y)
 {
   return floor((y - 70)/50);
@@ -132,37 +138,41 @@ int xLocation(int x)
 }
 
 char* Get_wifi_password(){
+  // Variable Set up
   Upper = true;
   Special = false;
   int y_div = 0;
   int x_div = 0;
-  static char password[30];
+  static char password[30]; // Needs to be static so that the password is saved through a function return
   int indexBuf = 0;
+  // Makes sure the password is always empty
   for(int l; l < 30; l++){
     password[l] = '\0';
   }
+  // Screen setup
   tft.fillScreen(HX8357_CYAN);
   tft.setRotation(1);
+  // Making Keyboard
   MakeKB_Button(Keypad_basic_upper);
+  // Creating entry field
   tft.fillRect(29, 19, 422, 42, HX8357_BLACK);
   tft.fillRect(30, 20, 420, 40, HX8357_WHITE);
   bool EnterCheck = true;
 
   // Keyboard interactions
-  Upper = true;
+  Upper = true; // Reset due to chance of overflow with multiple uses
   Special = false;
-  while(EnterCheck){
+  while(EnterCheck){ // While the enter button has not been pressed
+    // check where the Touchscreen was pressed
     TSPoint p = ts.getPoint();
     if (p.z > 100) {
       p.x = map(p.x, TS_MINX, TS_MAXX, tft.height(), 0);
       p.y = map(p.y, TS_MINY, TS_MAXY, 0, tft.width());
+      // If they are within the usuable region, continue
       if(p.x >= 70 && p.y >= 30){
         y_div = yLocation(p.x);
         x_div = xLocation(p.y);
-        Serial.println("x div: ");
-        Serial.println(x_div);
-        Serial.println("\ny div: ");
-        Serial.println(y_div);
+        // If the input is in the first 3 rows then choose the corrisponding button
         if((y_div < 3 && x_div >= 0 && x_div < 10) || (y_div == 3 && x_div > 1 && x_div < 8)){
           if(Special){
             password[indexBuf] = pgm_read_byte(&(Keypad_Special[y_div][x_div]));
@@ -178,12 +188,14 @@ char* Get_wifi_password(){
               indexBuf += 1;
             }
           }
+          // Add character to the entry field
           tft.fillRect(30, 20, 420, 40, HX8357_WHITE);
           tft.setTextSize(2);
           tft.setTextColor(HX8357_BLACK, HX8357_WHITE);
           tft.setCursor(35, 35);
           tft.println(password);
         }
+        // If the shift key is pressed then change from upper to lower
         else if( y_div ==3 && (x_div == 0 || x_div == 1)){
           if(!Special){
             if(Upper){
@@ -199,6 +211,7 @@ char* Get_wifi_password(){
             continue;
           }
         }
+        // If symbol button pressed than toggle symbol keyboard
         else if( y_div ==4 && (x_div == 0 || x_div == 1)){
           if(Special){
             Special = false;
@@ -214,8 +227,9 @@ char* Get_wifi_password(){
             MakeKB_Button(Keypad_Special);
           }
         }
+        // Back has been pressed so we will remove an index of the password
         else if(y_div == 3 && (x_div == 8 || x_div == 9)){
-          password[indexBuf - 1] = NULL
+          password[indexBuf - 1] = '\0'
           ;
           indexBuf -= 1;
 
@@ -225,13 +239,14 @@ char* Get_wifi_password(){
           tft.setCursor(35, 35);
           tft.println(F(password));
         }
+        // Enter has been pressed, ending the loop
         else if(y_div == 4 && (x_div == 8 || x_div == 9)){
           EnterCheck = false;
         }
+        // If Space bar is pressed then add a space
         else if(y_div == 4 && (x_div > 1 && x_div < 8)){
           password[indexBuf] = ' ';
           indexBuf += 1;
-          Serial.println("Ran space");
           delay(100);
         }
         else{
@@ -249,12 +264,9 @@ char* Get_wifi_password(){
 int Wifi_Selection(){
   bool WifiCheck = true;
   int page = 0;
-  if (WiFi.status() == WL_NO_MODULE) {
-    Serial.println("Communication with WiFi module failed!");
-  }
 
   int numNetworks = WiFi.scanNetworks();
-  Serial.println(numNetworks);
+  
   printWifiSelection(page, numNetworks);
   while(WifiCheck){
     TSPoint p = ts.getPoint();
@@ -268,18 +280,27 @@ int Wifi_Selection(){
       if(p.y >= 5 && p.x >= 10 && p.y <= 475 && p.x <= 310){
         if( p.y >= 80 && p.y <= 400){
           if( p.x >= 10 && p.x < 70){
-            if(WiFiConfirm(0)){
-              return ((page *5));
+            if( (page * 5) < numNetworks){
+              if(WiFiConfirm(0)){
+                return ((page *5));
+              }
+              printWifiSelection(page, numNetworks);
             }
           }
           else if( p.x >= 70 && p.x < 130 ){
-            if(WiFiConfirm(1)){
-              return ((page *5)+1);
+            if( ((page * 5) + 1) < numNetworks){
+              if(WiFiConfirm(1)){
+                return ((page *5)+1);
+              }
+              printWifiSelection(page, numNetworks);
             }
           }
           else if( p.x >= 130 && p.x < 190){
-            if(WiFiConfirm(2)){
-              return ((page *5)+2);
+            if( ((page * 5) + 2) < numNetworks){
+              if(WiFiConfirm(2)){
+                return ((page *5)+2);
+              }
+              printWifiSelection(page, numNetworks);
             }
           }
           else if( p.x >= 190 && p.x < 250){
@@ -287,14 +308,18 @@ int Wifi_Selection(){
               if(WiFiConfirm(3)){
                 return ((page *5)+3);
               }
+              printWifiSelection(page, numNetworks);
             }
           }
           else if( p.x >= 250 && p.x <= 310){
-            if(WiFiConfirm(4)){
-              return ((page *5)+4);
+            if(((page * 5) + 4) < numNetworks){
+              if(WiFiConfirm(4)){
+                return ((page *5)+4);
+              }
+              printWifiSelection(page, numNetworks);
             }
           }
-          printWifiSelection(page, numNetworks);
+          
         }
         else if(p.y < 80 && page > 0){
           page = page -1;
@@ -359,10 +384,10 @@ String WiFiStrength(int index){
 }
 
 bool WiFiConfirm(int index){
-  tft.fillRoundRect(300, 15 + (60*index) , 100, 46,3,HX8357_WHITE);
-  tft.fillRoundRect(300, 16 + (60*index), 98, 44, 3, HX8357_GREEN);
+  tft.fillRoundRect(290, 15 + (60*index) , 100, 46,3,HX8357_WHITE);
+  tft.fillRoundRect(290, 16 + (60*index), 98, 44, 3, HX8357_GREEN);
   tft.setTextColor(HX8357_BLACK, HX8357_GREEN);
-  tft.setCursor(310, 30 + (60 *index));
+  tft.setCursor(300, 30 + (60 *index));
   tft.print("Confirm");
   tft.setTextColor(HX8357_WHITE, HX8357_BLACK);
   delay(100);
@@ -390,7 +415,7 @@ bool WiFiConfirm(int index){
 void Wifi_Setup(void){
   int stat = WL_IDLE_STATUS;
   int WifiIndex = 0;
-  char* password = "";
+  char* password;
   WifiIndex = Wifi_Selection();
   if(WiFi.encryptionType(WifiIndex) != ENC_TYPE_NONE){
     password = Get_wifi_password();
@@ -500,126 +525,19 @@ void send_webhook(String IFTTT_Event, String IFTTT_Key, String IFTTT_Value1, Str
   client.stop();
 }
 
-void TestMode(){
-  unsigned long TimePassedTest = millis();
-  int testVal = HIGH;
-  bool RunTest = false;
-  bool PressedTest = false;
-  if(ActiveFire){
-    Aware = true;
-    return;
-  }
-  digitalWrite(testLED, HIGH);
-  while(testVal == HIGH){
-    testVal = digitalRead(testPin);
-    if((millis() - TimePassedTest) > 5000){
-      RunTest = true;
-      break;
-    }
-  }
-  digitalWrite(testLED, LOW);
-  if(RunTest){
-    
-    digitalWrite(LEDPin, HIGH);
-    digitalWrite(ShakerPin, HIGH);
-    MainMenu(2);
-    PressedTest = false;
-    while(!PressedTest || (millis() - TimePassedTest) <= 5000){
-      testVal = digitalRead(testPin);
-      if(!PressedTest && testVal == HIGH){
-        PressedTest = true;
-        TimePassedTest = millis();
-      }
-      else if(PressedTest && testVal == HIGH){
-      }
-      else if(PressedTest && testVal == LOW){
-        PressedTest = false;
-      }
-    }
-    digitalWrite(LEDPin, LOW);
-    digitalWrite(ShakerPin, LOW);
-    if(WiFi.status() == WL_CONNECTED){
-      MainMenu(1);
-    }
-    else{
-      MainMenu(0);
-    }
-  }
-}
-
-void WiFiMode(){
-  digitalWrite(testLED, HIGH);
-  int WifiVal = HIGH;
-  unsigned long TimePassedWiFi;
-  bool RunTest = false;
-  TimePassedWiFi = millis();
-  while(WifiVal == HIGH){
-    WifiVal = digitalRead(wifiPin);
-    if((millis() - TimePassedWiFi) > 5000){
-      RunTest = true;
-      break;
-    }
-  }
-  digitalWrite(testLED, LOW);
-  if(RunTest){
-    tft.fillScreen(HX8357_CYAN);
-    tft.setTextSize(4);
-    tft.setTextColor(HX8357_BLACK, HX8357_CYAN);
-    tft.setCursor(50, 100);
-    tft.println(F("Loading..."));
-    Wifi_Setup();
-  }
-}
 /////////////////////////////
 // Start of Main
 /////////////////////////////
 void setup() {
-  pinMode(testLED, OUTPUT);
   pinMode(LEDIndicator, OUTPUT);
   digitalWrite(LEDIndicator, HIGH);
-  pinMode(wifiPin, INPUT_PULLUP);
-  pinMode(testPin, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(testPin), TestMode, RISING);
-  attachInterrupt(digitalPinToInterrupt(wifiPin), WiFiMode, RISING);
+  pinMode(wifiPin, INPUT);
+  pinMode(testPin, INPUT);
   pinMode(LEDPin, OUTPUT);
   pinMode(ShakerPin, OUTPUT);
-  Serial.begin(9600);
   tft.begin();
   Wifi_Setup();
-  /*
-  int WifiIndex;
-  char* password = "";
-  Serial.begin(9600);
-  tft.begin();
-  while (!Serial) {
-    continue;
-  }
-  WifiIndex = Wifi_Selection();
-  if(WiFi.encryptionType(WifiIndex) != ENC_TYPE_NONE){
-    password = Get_wifi_password();
-  }
-  tft.fillScreen(HX8357_CYAN);
-  tft.setTextColor(HX8357_BLACK, HX8357_CYAN);
-  if(WiFi.encryptionType(WifiIndex) == ENC_TYPE_NONE){
-    while( stat != WL_CONNECTED){
-      tft.print("Connecting to WiFi");
-      stat = WiFi.begin(WiFi.SSID(WifiIndex));
-      delay(5000);
-    }
-  }
-  else{
-    while( stat != WL_CONNECTED){
-      tft.print("Connecting to WiFi");
-      stat = WiFi.begin(WiFi.SSID(WifiIndex), password);
-      delay(5000);
-    }
-  }
-  tft.fillScreen(HX8357_CYAN);
-  tft.setTextSize(4);
-  tft.setTextColor(HX8357_BLACK, HX8357_CYAN);
-  tft.setCursor(50, 100);
-  tft.println(F("Demo of Buttons"));
-  */
+  TimeIdle = millis();
 }
 
 void loop() {
@@ -632,62 +550,86 @@ void loop() {
       delay(100);
       if(analogRead(A1) >= 120){
         runs = runs + 1;
-        break;
       }
       else{
         check = false;
+        break;
       }
     }
     if(check){
-      delay(350);
+      delay(300);
       if(analogRead(A1) >= 120){
         check = false;
       }
       delay(100);
       if(analogRead(A1) >= 120){
-        check = false;
-      }
-      delay(350);
-      if(analogRead(A1) <= 120){
-        check = false;
-      }
-      delay(100);
-      if(analogRead(A1) <= 120){
         check = false;
       }
       if(check){
-        digitalWrite(LEDPin, HIGH);
-        digitalWrite(ShakerPin, HIGH);
-        TimePassedAlarm = millis();
-        send_webhook("Fire_Alarm", "9ELX13sgd-VdwIj4UlUoW", "","","");
-        MainMenu(3);
-        Aware = false;
-        ActiveFire = true;
-        while(Aware == false){
-          if((millis() - TimePassedAlarm) > 5000){
-            digitalWrite(LEDPin, LOW);
-            digitalWrite(ShakerPin, LOW);
+        delay(300);
+        if(analogRead(A1) <= 120){
+          check = false;
+        }
+        delay(100);
+        if(analogRead(A1) <= 120){
+          check = false;
+        }
+        if(check){
+          digitalWrite(LEDPin, HIGH);
+          digitalWrite(ShakerPin, HIGH);
+          TimePassedAlarm = millis();
+          send_webhook("Fire_Alarm", "9ELX13sgd-VdwIj4UlUoW", "","","");
+          MainMenu(3);
+          testVal = LOW;
+          while(testVal != HIGH){
+            testVal = digitalRead(testPin);
+            testVal = digitalRead(testPin);
+            if((millis() - TimePassedAlarm) > 500 && (millis() - TimePassedAlarm) < 1000){
+              digitalWrite(LEDPin, LOW);
+              digitalWrite(ShakerPin, LOW);
+            }
+            else if((millis() - TimePassedAlarm) > 1000 && (millis() - TimePassedAlarm) < 1500){
+              digitalWrite(LEDPin, HIGH);
+              digitalWrite(ShakerPin, HIGH);
+            }
+            else if((millis() - TimePassedAlarm) > 1500  && (millis() - TimePassedAlarm) < 2000){
+              digitalWrite(LEDPin, LOW);
+              digitalWrite(ShakerPin, LOW);
+            }
+            else if((millis() - TimePassedAlarm) > 2000  && (millis() - TimePassedAlarm) < 2500){
+              digitalWrite(LEDPin, HIGH);
+              digitalWrite(ShakerPin, HIGH);
+            }
+            else if((millis() - TimePassedAlarm) > 2500  && (millis() - TimePassedAlarm) < 3000){
+              digitalWrite(LEDPin, LOW);
+              digitalWrite(ShakerPin, LOW);
+            }
+            else if((millis() - TimePassedAlarm) > 3000  && (millis() - TimePassedAlarm) < 3500){
+              digitalWrite(LEDPin, HIGH);
+              digitalWrite(ShakerPin, HIGH);
+            }
+            else if((millis() - TimePassedAlarm) > 3500){
+              digitalWrite(LEDPin, LOW);
+              digitalWrite(ShakerPin, LOW);
+              TimePassedAlarm = millis();
+            }
+            
           }
-
-          if((millis() - TimePassedAlarm) > 5000){
-            digitalWrite(LEDPin, HIGH);
-            digitalWrite(ShakerPin, HIGH);
-            TimePassedAlarm = millis();
+          digitalWrite(LEDPin, LOW);
+          digitalWrite(ShakerPin, LOW);
+          PressedTest = false;
+          PressedWiFi = false;
+          TimeIdle = millis();
+          if(WiFi.status() == WL_CONNECTED){
+            MainMenu(1);
+          }
+          else{
+            MainMenu(0);
           }
         }
-        digitalWrite(LEDPin, LOW);
-        digitalWrite(ShakerPin, LOW);
-        if(WiFi.status() == WL_CONNECTED){
-          MainMenu(1);
-        }
-        else{
-          MainMenu(0);
-        }
-        ActiveFire = false;
       }
     }
   }
-  /*
   WifiVal = digitalRead(wifiPin);
   testVal = digitalRead(testPin);
   
@@ -697,12 +639,32 @@ void loop() {
   else if(!PressedWiFi && WifiVal == HIGH){
     PressedWiFi = true;
     TimePassedWiFi = millis();
+    TimeIdle = millis();
+    if(ScreenOff){
+      if(WiFi.status() == WL_CONNECTED){
+        MainMenu(1);
+      }
+      else{
+        MainMenu(0);
+      }
+      ScreenOff = false;
+    }
   }
   else if(PressedWiFi && WifiVal == LOW){
     PressedWiFi = false;
+    TimeIdle = millis();
+    if(ScreenOff){
+      if(WiFi.status() == WL_CONNECTED){
+        MainMenu(1);
+      }
+      else{
+        MainMenu(0);
+      }
+      ScreenOff = false;
+    }
   }
   //Wifi Check
-  else if(PressedWiFi && (millis() - TimePassedWiFi) > 5000){d
+  else if(PressedWiFi && (millis() - TimePassedWiFi) > 5000){
     tft.fillScreen(HX8357_CYAN);
     tft.setTextSize(4);
     tft.setTextColor(HX8357_BLACK, HX8357_CYAN);
@@ -711,25 +673,79 @@ void loop() {
     PressedTest = false;
     PressedWiFi = false;
     Wifi_Setup();
+    TimeIdle = millis();
+    ScreenOff = false;
   }
+
   //Test Button
   if(!PressedTest && testVal == LOW){
   }
-  if(!PressedTest && testVal == HIGH){
+  else if(!PressedTest && testVal == HIGH){
     PressedTest = true;
     TimePassedTest = millis();
+    TimeIdle = millis();
+    if(ScreenOff){
+      if(WiFi.status() == WL_CONNECTED){
+        MainMenu(1);
+      }
+      else{
+        MainMenu(0);
+      }
+      ScreenOff = false;
+    }
   }
   else if(PressedTest && testVal == LOW){
     PressedTest = false;
+    TimeIdle = millis();
+    if(ScreenOff){
+      if(WiFi.status() == WL_CONNECTED){
+        MainMenu(1);
+      }
+      else{
+        MainMenu(0);
+      }
+      ScreenOff = false;
+    }
   }
   //Test Check
   else if(PressedTest && ((millis() - TimePassedTest) > 5000)){
     digitalWrite(LEDPin, HIGH);
+    TimePassedAlarm = millis();
     digitalWrite(ShakerPin, HIGH);
     MainMenu(2);
     PressedTest = false;
     while(!PressedTest || (millis() - TimePassedTest) <= 5000){
       testVal = digitalRead(testPin);
+      if((millis() - TimePassedAlarm) > 500 && (millis() - TimePassedAlarm) < 1000){
+        digitalWrite(LEDPin, LOW);
+        digitalWrite(ShakerPin, LOW);
+      }
+      else if((millis() - TimePassedAlarm) > 1000 && (millis() - TimePassedAlarm) < 1500){
+        digitalWrite(LEDPin, HIGH);
+        digitalWrite(ShakerPin, HIGH);
+      }
+      else if((millis() - TimePassedAlarm) > 1500  && (millis() - TimePassedAlarm) < 2000){
+        digitalWrite(LEDPin, LOW);
+        digitalWrite(ShakerPin, LOW);
+      }
+      else if((millis() - TimePassedAlarm) > 2000  && (millis() - TimePassedAlarm) < 2500){
+        digitalWrite(LEDPin, HIGH);
+        digitalWrite(ShakerPin, HIGH);
+      }
+      else if((millis() - TimePassedAlarm) > 2500  && (millis() - TimePassedAlarm) < 3000){
+        digitalWrite(LEDPin, LOW);
+        digitalWrite(ShakerPin, LOW);
+      }
+      else if((millis() - TimePassedAlarm) > 3000  && (millis() - TimePassedAlarm) < 3500){
+        digitalWrite(LEDPin, HIGH);
+        digitalWrite(ShakerPin, HIGH);
+      }
+      else if((millis() - TimePassedAlarm) > 3500){
+        digitalWrite(LEDPin, LOW);
+        digitalWrite(ShakerPin, LOW);
+        TimePassedAlarm = millis();
+      }
+      
       if(!PressedTest && testVal == HIGH){
         PressedTest = true;
         TimePassedTest = millis();
@@ -744,6 +760,8 @@ void loop() {
     digitalWrite(ShakerPin, LOW);
     PressedTest = false;
     PressedWiFi = false;
+    TimeIdle = millis();
+    ScreenOff = false;
     if(WiFi.status() == WL_CONNECTED){
       MainMenu(1);
     }
@@ -751,5 +769,9 @@ void loop() {
       MainMenu(0);
     }
   }
-  */
+
+  if((millis() - TimeIdle) > 300000){
+    tft.fillScreen(HX8357_BLACK);
+    ScreenOff = true;
+  }
 }
