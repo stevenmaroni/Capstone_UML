@@ -482,12 +482,8 @@ void MainMenu(int type){
     tft.fillRoundRect(40, 180 , 400, 120,3,HX8357_BLACK);
     tft.setTextSize(3);
     tft.setTextColor(HX8357_WHITE, HX8357_BLACK);
-    //tft.setCursor(80, 220);
-    //tft.println(F("Silence/ Stop Test"));
-    tft.setCursor(130, 200);
-    tft.println(F("SILENCE ALARM"));
-    tft.setCursor(80, 240);
-    tft.println(F("& NOTIFY CAREGIVER"));
+    tft.setCursor(80, 220);
+    tft.println(F("Silence/ Stop Test"));
     tft.setTextSize(2);
     tft.setTextColor(HX8357_BLACK, HX8357_CYAN);
     
