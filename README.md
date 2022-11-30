@@ -37,3 +37,5 @@ Make sure that in the Tools Tab, these settings are correct:
 
 Once all settings are confirmed, you can run the code by pressing the Upload ("->") button. This will send the code to
 the arduino and it will run continously.
+
+All other information is contained in the user manual which will be included with the device.
