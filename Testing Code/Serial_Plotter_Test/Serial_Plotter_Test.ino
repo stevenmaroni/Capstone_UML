@@ -7,7 +7,10 @@ void setup() {
 void loop() {
  int microphone = analogRead(A1);
   Serial.print("MicrophoneVoltage:");
-  Serial.println(microphone);
+  Serial.print(microphone);
+  Serial.print(",");
+  Serial.print("Gate:");
+  Serial.println(analogRead(A4));
   //delay(100);
 
 }
