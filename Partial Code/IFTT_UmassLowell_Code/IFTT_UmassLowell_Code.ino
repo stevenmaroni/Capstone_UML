@@ -40,7 +40,7 @@ void setup() {
   Serial.print("Conneccted!");
 
   
-  send_webhook("Fire_Alarm", "9ELX13sgd-VdwIj4UlUoW", "Test","","");
+  send_webhook("Fire_Alarm", "", "Test","","");
   Serial.print("\nEmail Sent!");
 }
 
