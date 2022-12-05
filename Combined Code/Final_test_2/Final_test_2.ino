@@ -590,7 +590,7 @@ void loop() {
           digitalWrite(LEDPin, HIGH);
           digitalWrite(ShakerPin, HIGH);
           TimePassedAlarm = millis();
-          send_webhook("Fire_Alarm", "9ELX13sgd-VdwIj4UlUoW", "","","");
+          send_webhook("Fire_Alarm", "", "","","");
           MainMenu(3);
           testVal = LOW;
           while(testVal != HIGH){
