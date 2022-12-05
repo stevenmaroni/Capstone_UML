@@ -643,7 +643,7 @@ void loop() {
                 }
                 
               }
-              send_webhook("Fire_Alarm", "9ELX13sgd-VdwIj4UlUoW", "","","");
+              send_webhook("Fire_Alarm", "", "","","");
               digitalWrite(LEDPin, LOW);
               digitalWrite(ShakerPin, LOW);
               PressedTest = false;
@@ -746,7 +746,7 @@ void loop() {
     MainMenu(2);
     PressedTest = false;
     TouchCheck = false;
-    send_webhook("Test_FireAlarm", "9ELX13sgd-VdwIj4UlUoW", "","","");
+    send_webhook("Test_FireAlarm", "", "","","");
     while((!PressedTest || (millis() - TimePassedTest) <= 5000) && TouchCheck == false){
       testVal = digitalRead(testPin);
       Touch = ts.getPoint();
